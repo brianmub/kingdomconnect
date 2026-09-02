@@ -39,25 +39,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            const u = session?.user ?? null;
-            setUser(u);
-            if (u) fetchProfile(u.id);
-            setLoading(false);
-        });
+        let isMounted = true;
+
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                if (!isMounted) return;
+                const u = session?.user ?? null;
+                setUser(u);
+                if (u) {
+                    fetchProfile(u.id).catch((e) => console.warn('fetchProfile error:', e));
+                }
+            })
+            .catch((err) => {
+                console.warn('AuthContext: Error getting initial session:', err);
+            })
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!isMounted) return;
             const u = session?.user ?? null;
             setUser(u);
-            if (u) fetchProfile(u.id);
-            else {
+            if (u) {
+                fetchProfile(u.id).catch((e) => console.warn('fetchProfile error on state change:', e));
+            } else {
                 setProfile(null);
                 setProfiles([]);
             }
             setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const signOut = async () => {

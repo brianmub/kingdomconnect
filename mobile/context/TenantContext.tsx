@@ -35,7 +35,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setLoading(true);
 
         try {
-            const savedSlug = await SecureStore.getItemAsync('active_org_slug');
+            let savedSlug: string | null = null;
+            try {
+                savedSlug = await SecureStore.getItemAsync('active_org_slug');
+            } catch (storageErr) {
+                console.warn('TenantContext: Error reading active_org_slug:', storageErr);
+            }
             const effectiveSlug = slugOverride || savedSlug;
 
             let query = supabase.from('organizations').select('*');
@@ -62,7 +67,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (data?.slug) {
-                await SecureStore.setItemAsync('active_org_slug', data.slug);
+                try {
+                    await SecureStore.setItemAsync('active_org_slug', data.slug);
+                } catch (saveErr) {
+                    console.warn('TenantContext: Error saving active_org_slug:', saveErr);
+                }
             }
         } catch (err: any) {
             console.error('TenantContext: Error fetching organization:', err);
