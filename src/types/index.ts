@@ -100,11 +100,17 @@ export interface Session {
     location_type: 'physical' | 'virtual' | 'hybrid';
     location?: string;
     virtual_link?: string;
-    session_fee?: number;
+    session_fee?: number | null;
+    is_paid?: boolean;
+    currency?: string | null;
+    payment_method?: string | null;
+    payment_instructions?: string | null;
     qr_code_data: string;
     facilitator_id?: string;
     max_capacity?: number;
     is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface Attendance {

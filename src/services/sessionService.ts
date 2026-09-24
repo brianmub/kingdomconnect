@@ -2,25 +2,44 @@ import { supabase } from './supabase';
 import { Session, Attendance } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 15000, errorMsg: string = 'Operation timed out'): Promise<T> {
+    return Promise.race([
+        Promise.resolve(promise),
+        new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+        )
+    ]);
+}
+
+const generateId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uuidv4());
+
 export const sessionService = {
     async getSessions(programId: string) {
-        const { data, error } = await supabase
-            .from('sessions')
-            .select('*')
-            .eq('program_id', programId)
-            .order('session_date', { ascending: true });
+        const { data, error } = await withTimeout(
+            supabase
+                .from('sessions')
+                .select('*')
+                .eq('program_id', programId)
+                .order('session_date', { ascending: true }),
+            15000,
+            'Failed to fetch sessions: request timed out.'
+        );
 
         if (error) throw error;
         return data as Session[];
     },
 
     async updateSession(sessionId: string, updates: Partial<Session>) {
-        const { data, error } = await supabase
-            .from('sessions')
-            .update({ ...updates, updated_at: new Date().toISOString() })
-            .eq('id', sessionId)
-            .select()
-            .single();
+        const { data, error } = await withTimeout(
+            supabase
+                .from('sessions')
+                .update({ ...updates, updated_at: new Date().toISOString() })
+                .eq('id', sessionId)
+                .select()
+                .single(),
+            15000,
+            'Failed to update session: database request timed out.'
+        );
 
         if (error) throw error;
         return data as Session;
@@ -28,57 +47,82 @@ export const sessionService = {
 
     async deleteSession(sessionId: string) {
         // Guard: Check if attendance records exist
-        const { count, error: countError } = await supabase
-            .from('attendance_records')
-            .select('*', { count: 'exact', head: true })
-            .eq('session_id', sessionId);
+        const { count, error: countError } = await withTimeout(
+            supabase
+                .from('attendance_records')
+                .select('*', { count: 'exact', head: true })
+                .eq('session_id', sessionId),
+            15000,
+            'Failed to verify attendance records: request timed out.'
+        );
 
         if (countError) throw countError;
         if (count && count > 0) {
             throw new Error('HAS_ATTENDEES');
         }
 
-        const { error } = await supabase
-            .from('sessions')
-            .delete()
-            .eq('id', sessionId);
+        const { error } = await withTimeout(
+            supabase
+                .from('sessions')
+                .delete()
+                .eq('id', sessionId),
+            15000,
+            'Failed to delete session: database request timed out.'
+        );
 
         if (error) throw error;
     },
 
     async createSession(session: Partial<Session>) {
-        // First, insert with a temporary qr_code_data to let DB generate the ID
-        // (Avoiding NOT NULL constraint violation)
-        const tempQr = `temp-${uuidv4().substring(0, 8)}`;
-        const { data, error } = await supabase
-            .from('sessions')
-            .insert([{ ...session, qr_code_data: tempQr }])
-            .select()
-            .single();
+        const id = session.id || generateId();
+        const qr_code_data = session.qr_code_data || `sess-${id}`;
 
-        if (error) throw error;
+        const payload = {
+            ...session,
+            id,
+            qr_code_data,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
 
-        // If no qr_code_data was provided, update it to use the new ID
-        if (!session.qr_code_data) {
-            const { data: updated, error: updateError } = await supabase
+        const { data, error } = await withTimeout(
+            supabase
                 .from('sessions')
-                .update({ qr_code_data: `sess-${data.id}`, updated_at: new Date().toISOString() })
-                .eq('id', data.id)
+                .insert([payload])
                 .select()
-                .single();
-            
-            if (updateError) throw updateError;
-            return updated as Session;
+                .single(),
+            15000,
+            'Failed to publish session: database request timed out after 15 seconds. Please check your network connection.'
+        );
+
+        if (error) {
+            console.error('Error in createSession:', error);
+            throw error;
         }
 
         return data as Session;
     },
 
     async markAttendance(sessionId: string, userId: string, organizationId: string) {
-        // 1. Check for Session Payment (New Requirement)
-        const sessEnroll = await this.getSessionPaymentStatus(sessionId, userId);
-        if (!sessEnroll || sessEnroll.payment_status !== 'paid') {
-            throw new Error('PAYMENT_REQUIRED');
+        // 1. Check for Session Payment (only if session is configured as paid and fee > 0)
+        const { data: session, error: sessError } = await supabase
+            .from('sessions')
+            .select('is_paid, session_fee')
+            .eq('id', sessionId)
+            .single();
+
+        if (sessError) {
+            console.error('Error fetching session in markAttendance:', sessError);
+            throw sessError;
+        }
+
+        const isPaidSession = session?.is_paid === true && (Number(session?.session_fee) || 0) > 0;
+
+        if (isPaidSession) {
+            const sessEnroll = await this.getSessionPaymentStatus(sessionId, userId);
+            if (!sessEnroll || sessEnroll.payment_status !== 'paid') {
+                throw new Error('PAYMENT_REQUIRED');
+            }
         }
 
         // 2. Check if attendance already exists

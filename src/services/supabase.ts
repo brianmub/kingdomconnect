@@ -10,7 +10,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: true,
         storageKey: 'church-programs-auth-token',
-        // Fix for "Navigator LockManager returned a null lock" warning - disable locking
-        lock: typeof navigator !== 'undefined' ? (name, acquireTimeout, fn) => fn() : undefined,
+        // Prevent Web LockManager null lock warnings and cross-tab deadlocks
+        lock: typeof navigator !== 'undefined' ? async (_name, _acquireTimeout, fn) => await fn() : undefined,
     }
 });

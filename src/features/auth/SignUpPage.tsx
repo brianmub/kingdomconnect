@@ -169,8 +169,22 @@ export function SignUpPage() {
             >
                 <GlassBox className="p-10 border-surface-border bg-surface backdrop-blur-3xl overflow-hidden min-h-[500px] flex flex-col">
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-500 text-[10px] font-black uppercase tracking-widest text-center">
-                            {error}
+                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-xs text-center flex flex-col items-center gap-2">
+                            <div className="flex items-center gap-2 font-black uppercase tracking-wider text-[11px]">
+                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                <span>{error.includes('Supabase') || error.includes('database') ? 'Database Connection Alert' : 'Registration Alert'}</span>
+                            </div>
+                            <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300 max-w-md">{error}</p>
+                            {(error.includes('Supabase') || error.includes('database')) && (
+                                <a
+                                    href="https://supabase.com/dashboard"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+                                >
+                                    Open Supabase Dashboard &rarr;
+                                </a>
+                            )}
                         </div>
                     )}
                     <AnimatePresence mode="wait">
@@ -227,33 +241,43 @@ export function SignUpPage() {
                                         </div>
 
                                         {/* AI Strength Indicator */}
-                                        {formData.password && (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: -10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                className={`p-4 rounded-2xl border border-${passStrength.color}-100 bg-${passStrength.color}-50/30 space-y-3`}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <ShieldCheck className={`w-4 h-4 text-${passStrength.color}-500`} />
-                                                        <span className={`text-[10px] font-black uppercase tracking-widest text-${passStrength.color}-600`}>
-                                                            {passStrength.label}
-                                                        </span>
+                                        {formData.password && (() => {
+                                            const COLOR_MAP: Record<string, { bg: string; text: string; border: string; bar: string }> = {
+                                                red: { bg: 'bg-red-50/30', text: 'text-red-600', border: 'border-red-100', bar: 'bg-red-500 shadow-sm' },
+                                                orange: { bg: 'bg-orange-50/30', text: 'text-orange-600', border: 'border-orange-100', bar: 'bg-orange-500 shadow-sm' },
+                                                indigo: { bg: 'bg-indigo-50/30', text: 'text-indigo-600', border: 'border-indigo-100', bar: 'bg-indigo-500 shadow-sm' },
+                                                emerald: { bg: 'bg-emerald-50/30', text: 'text-emerald-600', border: 'border-emerald-100', bar: 'bg-emerald-500 shadow-sm' },
+                                                slate: { bg: 'bg-slate-50/30', text: 'text-slate-600', border: 'border-slate-100', bar: 'bg-slate-500 shadow-sm' },
+                                            };
+                                            const colors = COLOR_MAP[passStrength.color] || COLOR_MAP.slate;
+                                            return (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    className={`p-4 rounded-2xl border ${colors.border} ${colors.bg} space-y-3`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <ShieldCheck className={`w-4 h-4 ${colors.text}`} />
+                                                            <span className={`text-[10px] font-black uppercase tracking-widest ${colors.text}`}>
+                                                                {passStrength.label}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            {[1, 2, 3, 4].map(i => (
+                                                                <div
+                                                                    key={i}
+                                                                    className={`h-1.5 w-8 rounded-full transition-all duration-500 ${i <= passStrength.score ? colors.bar : 'bg-slate-200'}`}
+                                                                />
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                    <div className="flex gap-1">
-                                                        {[1, 2, 3, 4].map(i => (
-                                                            <div
-                                                                key={i}
-                                                                className={`h-1.5 w-8 rounded-full transition-all duration-500 ${i <= passStrength.score ? `bg-${passStrength.color}-500 shadow-[0_0_10px_rgba(var(--${passStrength.color}-500),0.5)]` : 'bg-slate-200'}`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
-                                                    <Sparkles className="w-3 h-3 inline mr-1 text-indigo-400" /> {passStrength.advice}
-                                                </p>
-                                            </motion.div>
-                                        )}
+                                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+                                                        <Sparkles className="w-3 h-3 inline mr-1 text-indigo-400" /> {passStrength.advice}
+                                                    </p>
+                                                </motion.div>
+                                            );
+                                        })()}
 
                                         <div className="relative group">
                                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 group-focus-within:text-indigo-400 transition-colors" />

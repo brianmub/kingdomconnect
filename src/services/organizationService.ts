@@ -37,6 +37,37 @@ export const organizationService = {
         return data;
     },
 
+    async createOrganization(org: {
+        name: string;
+        slug: string;
+        contact_email: string;
+        primary_color?: string;
+        secondary_color?: string;
+        join_code?: string;
+    }) {
+        const join_code = org.join_code || this.generateJoinCode();
+        const { data, error } = await supabase
+            .from('organizations')
+            .insert([{
+                name: org.name,
+                slug: org.slug,
+                contact_email: org.contact_email,
+                primary_color: org.primary_color || '#6366f1',
+                secondary_color: org.secondary_color || '#ec4899',
+                join_code,
+                is_active: true
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating organization:', error);
+            throw new Error(error.message);
+        }
+
+        return data;
+    },
+
     generateJoinCode() {
         // Generate a random 6-character uppercase alphanumeric code
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous characters (I, O, 0, 1, V, U)

@@ -1,7 +1,44 @@
 import { supabase } from './supabase';
 import { Organization } from '@/types';
+import { organizationService } from './organizationService';
 
 export const platformService = {
+    /**
+     * Create a new organization from platform management.
+     */
+    async createOrganization(org: {
+        name: string;
+        slug: string;
+        contact_email: string;
+        primary_color?: string;
+        secondary_color?: string;
+        join_code?: string;
+    }) {
+        const join_code = org.join_code || organizationService.generateJoinCode();
+        const { data, error } = await supabase
+            .from('organizations')
+            .insert([{
+                name: org.name,
+                slug: org.slug,
+                contact_email: org.contact_email,
+                primary_color: org.primary_color || '#6366f1',
+                secondary_color: org.secondary_color || '#ec4899',
+                join_code,
+                is_active: true
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('PlatformService: Error creating organization:', error);
+            if (error.code === '23505') {
+                throw new Error('An organization with this name or slug already exists.');
+            }
+            throw error;
+        }
+        return data;
+    },
+
     /**
      * Fetch all organizations across the platform.
      * This bypasses the typical organization-level filters.

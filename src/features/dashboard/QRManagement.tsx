@@ -288,7 +288,7 @@ export function QRManagement() {
 
                                                 {paymentRequired && (
                                                     <Button variant="premium" className="mt-8 h-12 uppercase font-black tracking-widest text-[10px]" onClick={() => setIsProcessingPayment(true)}>
-                                                        <Banknote className="w-4 h-4 mr-2" /> Tender ${session?.session_fee?.toFixed(2) || '5.00'}
+                                                        <Banknote className="w-4 h-4 mr-2" /> Tender {session?.currency || 'USD'} {(Number(session?.session_fee) || 0).toFixed(2)}
                                                     </Button>
                                                 )}
                                             </div>
@@ -463,16 +463,18 @@ export function QRManagement() {
                                         </div>
 
                                         <div className="flex gap-3 w-full md:w-auto">
-                                            <Button
-                                                variant="outline"
-                                                className="h-12 flex-1 md:flex-none px-6 text-[10px] font-black uppercase tracking-widest bg-emerald-500/5 text-emerald-600 border-emerald-500/10 hover:bg-emerald-500/10 transition-all"
-                                                onClick={() => {
-                                                    setPaymentRequired({ userId: userItem.id });
-                                                    setIsProcessingPayment(true);
-                                                }}
-                                            >
-                                                <Banknote className="w-4 h-4 mr-2" /> Fee
-                                            </Button>
+                                            {session?.is_paid && (Number(session?.session_fee) || 0) > 0 && (
+                                                <Button
+                                                    variant="outline"
+                                                    className="h-12 flex-1 md:flex-none px-6 text-[10px] font-black uppercase tracking-widest bg-emerald-500/5 text-emerald-600 border-emerald-500/10 hover:bg-emerald-500/10 transition-all"
+                                                    onClick={() => {
+                                                        setPaymentRequired({ userId: userItem.id });
+                                                        setIsProcessingPayment(true);
+                                                    }}
+                                                >
+                                                    <Banknote className="w-4 h-4 mr-2" /> Fee
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="premium"
                                                 className="h-12 flex-1 md:flex-none px-8 text-[10px] font-black uppercase tracking-widest shadow-xl"
@@ -523,7 +525,7 @@ export function QRManagement() {
 
                         <div className="bg-background rounded-3xl p-8 mb-10 border border-surface-border shadow-inner">
                             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Tender Amount</p>
-                            <p className="text-6xl font-black text-foreground tracking-tighter">${session?.session_fee?.toFixed(2) || '5.00'}</p>
+                            <p className="text-6xl font-black text-foreground tracking-tighter">{session?.currency === 'USD' ? '$' : (session?.currency || '$')}{(Number(session?.session_fee) || 0).toFixed(2)}</p>
                         </div>
 
                         <div className="space-y-4">
@@ -532,12 +534,13 @@ export function QRManagement() {
                                 className="w-full h-16 uppercase font-black tracking-[0.2em] text-xs shadow-2xl"
                                 onClick={async () => {
                                     try {
+                                        const feeAmount = Number(session?.session_fee) || 0;
                                         const p = await sessionService.recordSessionPayment(
                                             sessionId!,
                                             paymentRequired.userId,
                                             organization!.id,
-                                            session?.session_fee || 5,
-                                            'cash',
+                                            feeAmount,
+                                            session?.payment_method || 'cash',
                                             profile!.id,
                                             'paid'
                                         );

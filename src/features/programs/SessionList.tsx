@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sessionService } from '@/services/sessionService';
 import { programService } from '@/services/programService';
+import { supabase } from '@/services/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Session, Program } from '@/types';
 import { Banknote, AlertCircle, AlertTriangle } from 'lucide-react';
@@ -55,7 +56,7 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                         const status = await sessionService.getSessionPaymentStatus(s.id, user.id);
                         if (status) statusMap[s.id] = status;
 
-                        const { data: att } = await (await import('@/services/supabase')).supabase
+                        const { data: att } = await supabase
                             .from('attendance_records')
                             .select('*')
                             .eq('session_id', s.id)
@@ -110,22 +111,22 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
         if (!user || !profile) return;
         try {
             setEnrollingId(session.id);
-            const fee = session.session_fee || program?.session_fee || 0;
-            const isPaid = fee > 0;
+            const isPaidSession = session.is_paid === true && (Number(session.session_fee) || 0) > 0;
+            const fee = isPaidSession ? (Number(session.session_fee) || 0) : 0;
 
             await sessionService.recordSessionPayment(
                 session.id,
                 user.id,
                 session.organization_id,
                 fee,
-                'cash',
+                session.payment_method || 'cash',
                 user.id,
-                isPaid ? 'pending' : 'paid'
+                isPaidSession ? 'pending' : 'paid'
             );
 
             await fetchData();
-            if (isPaid) {
-                alert(`Enrollment requested for ${session.name}. Please pay $${fee.toFixed(2)} at the office to finalize.`);
+            if (isPaidSession) {
+                alert(`Enrollment requested for ${session.name}. Please pay ${session.currency || 'USD'} ${fee.toFixed(2)} at the office to finalize.`);
             }
         } catch (err: any) {
             alert('Failed to join session: ' + err.message);
@@ -234,6 +235,14 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                                     }`}>
                                                     {session.is_active ? 'Active' : 'Hidden'}
                                                 </span>
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border shadow-sm ${session.is_paid && (Number(session.session_fee) || 0) > 0
+                                                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                                    : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                                    }`}>
+                                                    {session.is_paid && (Number(session.session_fee) || 0) > 0
+                                                        ? `${session.currency || 'USD'} ${(Number(session.session_fee) || 0).toFixed(2)}`
+                                                        : 'Free Session'}
+                                                </span>
                                                 <div className="flex items-center text-[10px] font-black text-slate-500 uppercase tracking-widest bg-background px-3 py-1.5 rounded-lg border border-surface-border">
                                                     <Clock className="w-3.5 h-3.5 mr-2 text-primary" /> {session.start_time.slice(0, 5)}
                                                 </div>
@@ -247,14 +256,19 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {isParticipant && (
-                                                <div className={`px-4 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${paymentStatuses[session.id]?.payment_status === 'paid'
-                                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                                    : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                                                <div className={`px-4 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                                                    (!session.is_paid || (Number(session.session_fee) || 0) === 0)
+                                                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                                        : paymentStatuses[session.id]?.payment_status === 'paid'
+                                                        ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                                        : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
                                                     }`}>
                                                     <Banknote className="w-3.5 h-3.5" />
-                                                    {paymentStatuses[session.id]?.payment_status === 'paid'
+                                                    {(!session.is_paid || (Number(session.session_fee) || 0) === 0)
+                                                        ? 'Free'
+                                                        : paymentStatuses[session.id]?.payment_status === 'paid'
                                                         ? 'Paid'
-                                                        : `Unpaid ($${session.session_fee || program?.session_fee || 0})`}
+                                                        : `Unpaid (${session.currency || 'USD'} ${Number(session.session_fee) || 0})`}
                                                 </div>
                                             )}
                                             {isAdmin && (
@@ -331,7 +345,7 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                                 </div>
                                             </div>
 
-                                            {isParticipant && paymentStatuses[session.id]?.payment_status !== 'paid' && (
+                                            {isParticipant && session.is_paid && (Number(session.session_fee) || 0) > 0 && paymentStatuses[session.id]?.payment_status !== 'paid' && (
                                                 <div className="flex items-center gap-3 text-amber-500">
                                                     <AlertCircle className="w-4 h-4" />
                                                     <p className="text-[9px] font-black uppercase tracking-widest">Pay to unlock check-in</p>
@@ -361,30 +375,38 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                                 </div>
                                             )}
                                             {isParticipant && (
-                                                <Button
-                                                    variant={paymentStatuses[session.id]?.payment_status === 'paid' ? "outline" : "premium"}
-                                                    className="h-12 px-6 border-surface-border text-[10px] font-black uppercase tracking-widest"
-                                                    disabled={enrollingId === session.id}
-                                                    onClick={() => {
-                                                        if (paymentStatuses[session.id]?.payment_status === 'paid') {
-                                                            navigate(`/portal/${profile?.orgSlug}/dashboard/qr?session=${session.id}`);
-                                                        } else {
-                                                            handleSessionEnroll(session);
-                                                        }
-                                                    }}
-                                                >
-                                                    {enrollingId === session.id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : paymentStatuses[session.id]?.payment_status === 'paid' ? (
-                                                        <>
-                                                            <CheckCircle className="w-3.5 h-3.5 mr-2" /> My Check-in
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Sparkles className="w-3.5 h-3.5 mr-2" /> Book Session
-                                                        </>
-                                                    )}
-                                                </Button>
+                                                (() => {
+                                                    const isFree = !session.is_paid || (Number(session.session_fee) || 0) === 0;
+                                                    const isPaid = paymentStatuses[session.id]?.payment_status === 'paid';
+                                                    const canCheckIn = isFree || isPaid;
+
+                                                    return (
+                                                        <Button
+                                                            variant={canCheckIn ? "outline" : "premium"}
+                                                            className="h-12 px-6 border-surface-border text-[10px] font-black uppercase tracking-widest"
+                                                            disabled={enrollingId === session.id}
+                                                            onClick={() => {
+                                                                if (canCheckIn) {
+                                                                    navigate(`/portal/${profile?.orgSlug}/dashboard/qr?session=${session.id}`);
+                                                                } else {
+                                                                    handleSessionEnroll(session);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {enrollingId === session.id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : canCheckIn ? (
+                                                                <>
+                                                                    <CheckCircle className="w-3.5 h-3.5 mr-2" /> My Check-in
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Sparkles className="w-3.5 h-3.5 mr-2" /> Book Session
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    );
+                                                })()
                                             )}
                                         </div>
                                     </div>

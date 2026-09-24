@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         };
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             console.log('AuthContext: onAuthStateChange event:', event);
             if (!mounted) return;
 
@@ -78,7 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(u);
 
             if (u) {
-                await fetchProfile(u.id);
+                // Defer profile fetch outside of the auth lock context to avoid deadlock
+                setTimeout(() => {
+                    if (mounted) {
+                        fetchProfile(u.id);
+                    }
+                }, 0);
             } else {
                 setProfile(null);
                 setProfiles([]);

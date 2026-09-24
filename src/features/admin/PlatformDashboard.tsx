@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Users, Layout, ShieldCheck, Search, Filter, MoreVertical, Ban, CheckCircle, ExternalLink, Trash2, Pencil, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { Building2, Users, Layout, ShieldCheck, Search, Filter, MoreVertical, Ban, CheckCircle, ExternalLink, Trash2, Pencil, X, AlertTriangle, Loader2, Plus, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { GlassBox, Card } from '@/components/ui/Card';
 import { platformService } from '@/services/platformService';
@@ -21,6 +21,18 @@ export function PlatformDashboard() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [deletingOrg, setDeletingOrg] = useState<any>(null);
     const [saveLoading, setSaveLoading] = useState(false);
+
+    // Create Organization Modal State
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createLoading, setCreateLoading] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
+    const [newOrg, setNewOrg] = useState({
+        name: '',
+        slug: '',
+        contact_email: '',
+        primary_color: '#6366f1',
+        secondary_color: '#ec4899',
+    });
 
     useEffect(() => {
         loadData();
@@ -68,6 +80,32 @@ export function PlatformDashboard() {
             }
         } catch (error) {
             console.error('Impersonation failed:', error);
+        }
+    };
+
+    const handleCreateOrg = async () => {
+        if (!newOrg.name.trim() || !newOrg.slug.trim() || !newOrg.contact_email.trim()) {
+            setCreateError('Name, slug, and contact email are required.');
+            return;
+        }
+        try {
+            setCreateLoading(true);
+            setCreateError(null);
+            await platformService.createOrganization(newOrg);
+            setIsCreateModalOpen(false);
+            setNewOrg({
+                name: '',
+                slug: '',
+                contact_email: '',
+                primary_color: '#6366f1',
+                secondary_color: '#ec4899',
+            });
+            await loadData();
+        } catch (error: any) {
+            console.error('Error creating organization:', error);
+            setCreateError(error.message || 'Failed to create organization');
+        } finally {
+            setCreateLoading(false);
         }
     };
 
@@ -178,6 +216,16 @@ export function PlatformDashboard() {
                         <Button variant="outline" className="text-xs font-black uppercase tracking-widest bg-background border-surface-border" onClick={loadData}>
                             Refresh Data
                         </Button>
+                        <Button
+                            variant="premium"
+                            className="text-xs font-black uppercase tracking-widest gap-2"
+                            onClick={() => {
+                                setCreateError(null);
+                                setIsCreateModalOpen(true);
+                            }}
+                        >
+                            <Plus className="w-4 h-4" /> Create Organization
+                        </Button>
                     </div>
                 </div>
 
@@ -281,6 +329,119 @@ export function PlatformDashboard() {
                     )}
                 </div>
             </Card>
+
+            {/* Create Organization Modal */}
+            <AnimatePresence>
+                {isCreateModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-background w-full max-w-lg rounded-3xl border border-surface-border shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6 border-b border-surface-border flex items-center justify-between bg-slate-50/50">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-primary/10 rounded-xl text-primary">
+                                        <Building2 className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-foreground uppercase tracking-tight">Create Organization</h3>
+                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Provision a new ministry or tenant</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {createError && (
+                                <div className="mx-8 mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-xs font-bold flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                    <span>{createError}</span>
+                                </div>
+                            )}
+
+                            <div className="p-8 space-y-5">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Organization Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Grace Fellowship"
+                                        value={newOrg.name}
+                                        onChange={(e) => {
+                                            const name = e.target.value;
+                                            const autoSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                            setNewOrg(prev => ({
+                                                ...prev,
+                                                name,
+                                                slug: prev.slug === '' || prev.slug === prev.name.toLowerCase().replace(/[^a-z0-9]/g, '') ? autoSlug : prev.slug
+                                            }));
+                                        }}
+                                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-background focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">System Slug</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. gracefellowship"
+                                        value={newOrg.slug}
+                                        onChange={(e) => setNewOrg(prev => ({ ...prev, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
+                                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-background focus:ring-2 focus:ring-primary/20 outline-none font-bold font-mono text-sm"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Administrator Contact Email</label>
+                                    <input
+                                        type="email"
+                                        placeholder="admin@example.com"
+                                        value={newOrg.contact_email}
+                                        onChange={(e) => setNewOrg(prev => ({ ...prev, contact_email: e.target.value }))}
+                                        className="w-full px-4 py-3 rounded-xl border border-surface-border bg-background focus:ring-2 focus:ring-primary/20 outline-none font-bold text-sm"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Primary Color</label>
+                                        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-surface-border">
+                                            <input
+                                                type="color"
+                                                value={newOrg.primary_color}
+                                                onChange={(e) => setNewOrg(prev => ({ ...prev, primary_color: e.target.value }))}
+                                                className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                            />
+                                            <span className="text-xs font-mono font-bold text-slate-600">{newOrg.primary_color}</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Secondary Color</label>
+                                        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-surface-border">
+                                            <input
+                                                type="color"
+                                                value={newOrg.secondary_color}
+                                                onChange={(e) => setNewOrg(prev => ({ ...prev, secondary_color: e.target.value }))}
+                                                className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                            />
+                                            <span className="text-xs font-mono font-bold text-slate-600">{newOrg.secondary_color}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-slate-50/50 border-t border-surface-border flex gap-3">
+                                <Button variant="outline" className="flex-1 font-black uppercase tracking-widest border-surface-border" onClick={() => setIsCreateModalOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button variant="premium" className="flex-1 font-black uppercase tracking-widest" onClick={handleCreateOrg} disabled={createLoading}>
+                                    {createLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Organization'}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Edit Modal */}
             <AnimatePresence>

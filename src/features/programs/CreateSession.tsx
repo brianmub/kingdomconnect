@@ -47,6 +47,15 @@ export function CreateSession() {
         try {
             const data = await programService.getProgramById(programId!);
             setProgram(data);
+            if (data) {
+                const programHasFee = (data.session_fee || 0) > 0;
+                setFormData(prev => ({
+                    ...prev,
+                    is_paid: programHasFee,
+                    session_fee: data.session_fee || 0,
+                    currency: data.currency || 'USD'
+                }));
+            }
         } catch (err: any) {
             setError('Failed to load program details.');
         } finally {
@@ -60,8 +69,9 @@ export function CreateSession() {
             return;
         }
 
-        if (!user || !organization) {
-            setError('Authentication error. Please reload.');
+        const targetOrgId = program?.organization_id || organization?.id;
+        if (!user || !targetOrgId) {
+            setError('Authentication or organization details missing. Please refresh and try again.');
             return;
         }
 
@@ -69,27 +79,36 @@ export function CreateSession() {
             setSaving(true);
             setError(null);
 
-            // Build only the fields the sessions table actually has
-            const { is_paid, session_fee, currency, payment_method, payment_instructions, ...baseFields } = formData;
-
             await sessionService.createSession({
-                ...baseFields,
-                location_type: baseFields.location_type as any,
+                name: formData.name.trim(),
+                description: formData.description.trim() || undefined,
+                session_date: formData.session_date,
+                start_time: formData.start_time.length === 5 ? `${formData.start_time}:00` : formData.start_time,
+                end_time: formData.end_time.length === 5 ? `${formData.end_time}:00` : formData.end_time,
+                location_type: formData.location_type as any,
+                location: formData.location.trim() || undefined,
+                max_capacity: formData.max_capacity ? Number(formData.max_capacity) : 0,
                 program_id: programId,
-                organization_id: organization.id,
+                organization_id: targetOrgId,
                 is_active: true,
-                // Economic fields — only sent if the columns exist in DB (run migration first)
-                // Uncomment after running the SQL migration:
-                // session_fee: is_paid ? session_fee : 0,
-                // currency,
-                // payment_method: is_paid ? payment_method : null,
-                // payment_instructions: is_paid ? payment_instructions : null,
-            } as any);
+                is_paid: Boolean(formData.is_paid),
+                session_fee: formData.is_paid ? Number(formData.session_fee) || 0 : 0,
+                currency: formData.currency || 'USD',
+                payment_method: formData.is_paid ? (formData.payment_method || 'cash') : null,
+                payment_instructions: formData.is_paid ? (formData.payment_instructions.trim() || null) : null,
+            });
 
             navigate(`/dashboard/programs/${programId}/sessions`);
         } catch (err: any) {
-            console.error(err);
-            setError(err.message || 'Failed to create session.');
+            console.error('Error in createSession:', err);
+            const msg = err.message || '';
+            if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_FAILED')) {
+                setError('Network connection error: Unable to communicate with the database. Please check your internet connection or reload the page.');
+            } else if (msg.toLowerCase().includes('timed out') || msg.toLowerCase().includes('timeout')) {
+                setError('Request timed out: The server took too long to respond. Please check your internet connection and try again.');
+            } else {
+                setError(msg || 'Failed to create session. Please try again.');
+            }
         } finally {
             setSaving(false);
         }
