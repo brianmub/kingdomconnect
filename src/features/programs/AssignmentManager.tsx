@@ -21,8 +21,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function AssignmentManager({ programId }: { programId: string }) {
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const { organization } = useOrganization();
+    const orgId = organization?.id || profile?.organization_id;
     const [assignments, setAssignments] = useState<any[]>([]);
     const [sessions, setSessions] = useState<any[]>([]);
     const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
@@ -107,7 +108,12 @@ export function AssignmentManager({ programId }: { programId: string }) {
                 return;
             }
 
-            const data = await assignmentService.getAssignments(organization!.id);
+            if (!orgId) {
+                setAssignments([]);
+                return;
+            }
+
+            const data = await assignmentService.getAssignments(orgId);
             // Filter by program's sessions
             const filtered = data?.filter(asg => sessionIds.includes(asg.session_id)) || [];
             setAssignments(filtered);
@@ -130,6 +136,10 @@ export function AssignmentManager({ programId }: { programId: string }) {
     const handleCreateAssignment = async (e: React.FormEvent) => {
         e.preventDefault();
         setCreateError(null);
+        if (!orgId) {
+            setCreateError('Organization context missing. Please refresh and try again.');
+            return;
+        }
         if (!newAssignment.session_id) {
             setCreateError('Please select a session for this assignment.');
             return;
@@ -137,7 +147,7 @@ export function AssignmentManager({ programId }: { programId: string }) {
         try {
             await assignmentService.createAssignment({
                 ...newAssignment,
-                organization_id: organization!.id,
+                organization_id: orgId,
                 is_active: true
             });
             setIsCreateModalOpen(false);

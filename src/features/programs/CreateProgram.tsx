@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 export function CreateProgram() {
     const navigate = useNavigate();
     const { organization, loading: orgLoading } = useOrganization();
-    const { user, profile, loading: authLoading } = useAuth();
+    const { user, profile, profiles, loading: authLoading } = useAuth();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -31,8 +31,11 @@ export function CreateProgram() {
     });
 
     const handleSave = async () => {
-        if (!organization?.id || !profile?.id) {
-            console.error('Missing context:', { orgId: organization?.id, profileId: profile?.id });
+        const orgId = organization?.id || profile?.organization_id || profiles?.[0]?.organization_id;
+        const creatorId = profile?.id || user?.id;
+
+        if (!orgId || !creatorId) {
+            console.error('Missing context:', { orgId, creatorId, organization, profile, user });
             setError('System Error: Missing organization or profile context. Please reload.');
             return;
         }
@@ -48,8 +51,8 @@ export function CreateProgram() {
 
             // Construct payload with ONLY valid columns
             const programPayload = {
-                organization_id: organization.id,
-                created_by: profile.id,
+                organization_id: orgId,
+                created_by: creatorId,
                 name: formData.name,
                 category: formData.category,
                 description: formData.description,

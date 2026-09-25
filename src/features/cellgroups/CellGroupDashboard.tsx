@@ -28,7 +28,7 @@ interface CellGroup {
 
 export function CellGroupDashboard() {
     const { organization } = useOrganization();
-    const { profile } = useAuth();
+    const { profile, user } = useAuth();
     const { orgSlug } = useParams();
     const navigate = useNavigate();
     const basePath = orgSlug ? `/portal/${orgSlug}/dashboard/cell-groups` : '/dashboard/cell-groups';
@@ -306,8 +306,8 @@ export function CellGroupDashboard() {
             {scheduleGroup && (
                 <ScheduleMeetingModal
                     group={scheduleGroup}
-                    organizationId={organization!.id}
-                    createdBy={profile!.id}
+                    organizationId={organization?.id || profile?.organization_id || ''}
+                    createdBy={profile?.id || user?.id || ''}
                     onClose={() => setScheduleGroup(null)}
                     onSuccess={(meetingId) => navigate(`${basePath}/${meetingId}`)}
                 />
@@ -359,6 +359,7 @@ export function CellGroupDashboard() {
 // ─── Manage Members Modal ────────────────────────────────────────────────────
 function ManageMembersModal({ group, onClose, onSave }: { group: CellGroup, onClose: () => void, onSave: () => void }) {
     const { organization } = useOrganization();
+    const { profile } = useAuth();
     const [members, setMembers] = useState<any[]>([]);
     const [availableUsers, setAvailableUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -457,12 +458,19 @@ function ManageMembersModal({ group, onClose, onSave }: { group: CellGroup, onCl
                 throw new Error('This participant is already assigned to a group in this program. A participant can only be in one group per program.');
             }
 
+            const targetOrgId = organization?.id || profile?.organization_id;
+            if (!targetOrgId) {
+                alert('Organization context is missing. Please refresh and try again.');
+                setAdding(false);
+                return;
+            }
+
             const { error } = await supabase
                 .from('group_members')
                 .insert([{
                     group_id: group.id,
                     user_id: userId,
-                    organization_id: organization!.id
+                    organization_id: targetOrgId
                 }]);
 
             if (error) throw error;
@@ -679,6 +687,7 @@ function GroupModal({ programs, facilitators, editingGroup, onClose, onSuccess }
     onSuccess: () => void 
 }) {
     const { organization } = useOrganization();
+    const { profile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState(editingGroup?.name || '');
     const [description, setDescription] = useState(editingGroup?.description || '');
@@ -689,10 +698,15 @@ function GroupModal({ programs, facilitators, editingGroup, onClose, onSuccess }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const targetOrgId = organization?.id || profile?.organization_id;
+        if (!targetOrgId) {
+            alert('Organization context is missing. Please refresh and try again.');
+            return;
+        }
         setLoading(true);
         try {
             const payload = {
-                organization_id: organization!.id,
+                organization_id: targetOrgId,
                 program_id: programId,
                 name,
                 description,

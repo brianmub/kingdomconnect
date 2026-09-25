@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { Session, Attendance } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
-function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 15000, errorMsg: string = 'Operation timed out'): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number = 60000, errorMsg: string = 'Operation timed out'): Promise<T> {
     return Promise.race([
         Promise.resolve(promise),
         new Promise<never>((_, reject) =>
@@ -21,7 +21,7 @@ export const sessionService = {
                 .select('*')
                 .eq('program_id', programId)
                 .order('session_date', { ascending: true }),
-            15000,
+            60000,
             'Failed to fetch sessions: request timed out.'
         );
 
@@ -30,14 +30,45 @@ export const sessionService = {
     },
 
     async updateSession(sessionId: string, updates: Partial<Session>) {
+        const payload: any = {
+            ...updates,
+            updated_at: new Date().toISOString()
+        };
+
+        if (updates.name !== undefined) {
+            payload.name = updates.name;
+            payload.title = updates.name;
+        } else if ((updates as any).title !== undefined) {
+            payload.name = (updates as any).title;
+            payload.title = (updates as any).title;
+        }
+
+        if (updates.description !== undefined) {
+            payload.description = updates.description;
+            payload.overview = updates.description;
+        } else if ((updates as any).overview !== undefined) {
+            payload.description = (updates as any).overview;
+            payload.overview = (updates as any).overview;
+        }
+
+        if (updates.session_date !== undefined) {
+            const d = updates.session_date;
+            payload.session_date = d ? d.split('T')[0] : null;
+            payload.date = d ? (d.includes('T') ? d : `${d}T00:00:00.000Z`) : null;
+        } else if ((updates as any).date !== undefined) {
+            const d = (updates as any).date;
+            payload.date = d ? (d.includes('T') ? d : `${d}T00:00:00.000Z`) : null;
+            payload.session_date = d ? d.split('T')[0] : null;
+        }
+
         const { data, error } = await withTimeout(
             supabase
                 .from('sessions')
-                .update({ ...updates, updated_at: new Date().toISOString() })
+                .update(payload)
                 .eq('id', sessionId)
                 .select()
                 .single(),
-            15000,
+            60000,
             'Failed to update session: database request timed out.'
         );
 
@@ -52,7 +83,7 @@ export const sessionService = {
                 .from('attendance_records')
                 .select('*', { count: 'exact', head: true })
                 .eq('session_id', sessionId),
-            15000,
+            60000,
             'Failed to verify attendance records: request timed out.'
         );
 
@@ -66,7 +97,7 @@ export const sessionService = {
                 .from('sessions')
                 .delete()
                 .eq('id', sessionId),
-            15000,
+            60000,
             'Failed to delete session: database request timed out.'
         );
 
@@ -77,9 +108,22 @@ export const sessionService = {
         const id = session.id || generateId();
         const qr_code_data = session.qr_code_data || `sess-${id}`;
 
-        const payload = {
+        const sessionName = session.name || (session as any).title || 'Session';
+        const sessionDesc = session.description ?? (session as any).overview ?? '';
+        const sessionDate = session.session_date || (session as any).date;
+        const normalizedDate = sessionDate ? (sessionDate.includes('T') ? sessionDate.split('T')[0] : sessionDate) : new Date().toISOString().split('T')[0];
+
+        const payload: any = {
             ...session,
             id,
+            name: sessionName,
+            title: sessionName,
+            description: sessionDesc,
+            overview: sessionDesc,
+            session_date: normalizedDate,
+            date: normalizedDate ? `${normalizedDate}T00:00:00.000Z` : null,
+            start_time: session.start_time || '09:00:00',
+            end_time: session.end_time || '11:00:00',
             qr_code_data,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -91,8 +135,8 @@ export const sessionService = {
                 .insert([payload])
                 .select()
                 .single(),
-            15000,
-            'Failed to publish session: database request timed out after 15 seconds. Please check your network connection.'
+            60000,
+            'Failed to publish session: database request timed out. Please check your network connection.'
         );
 
         if (error) {

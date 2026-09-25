@@ -360,25 +360,64 @@ export const storage = {
     };
   },
 
-  async updateSession(id: string, updates: Partial<Session>): Promise<Session | null> {
-    // Only map back if the mobile app attempts an update, though typically admins use the web portal
-    const { data, error } = await supabase.from('sessions').update({
-       name: updates.title,
-       description: updates.overview,
-       session_date: updates.date,
-       session_number: updates.session_number
-    }).eq('id', id).select().single();
+  async updateSession(id: string, updates: Partial<Session> & { name?: string; description?: string; session_date?: string; start_time?: string; end_time?: string }): Promise<Session | null> {
+    const payload: any = {
+      updated_at: new Date().toISOString()
+    };
+    if (updates.title !== undefined || updates.name !== undefined) {
+      const val = updates.title || updates.name;
+      payload.name = val;
+      payload.title = val;
+    }
+    if (updates.overview !== undefined || updates.description !== undefined) {
+      const val = updates.overview ?? updates.description;
+      payload.description = val;
+      payload.overview = val;
+    }
+    if (updates.date !== undefined || updates.session_date !== undefined) {
+      const val = updates.date || updates.session_date;
+      payload.session_date = val ? val.split('T')[0] : null;
+      payload.date = val ? (val.includes('T') ? val : `${val}T00:00:00.000Z`) : null;
+    }
+    if (updates.session_number !== undefined) {
+      payload.session_number = updates.session_number;
+    }
+    if (updates.start_time !== undefined) {
+      payload.start_time = updates.start_time;
+    }
+    if (updates.end_time !== undefined) {
+      payload.end_time = updates.end_time;
+    }
+
+    const { data, error } = await supabase.from('sessions').update(payload).eq('id', id).select().single();
     if (error) throw error;
     return this.mapDbSessionToMobile(data);
   },
 
-  async createSession(session: Omit<Session, 'id' | 'qr_code_data'> & { qr_code_data?: string }): Promise<Session> {
+  async createSession(session: Omit<Session, 'id' | 'qr_code_data'> & { qr_code_data?: string; organization_id?: string; name?: string; description?: string; session_date?: string; start_time?: string; end_time?: string }): Promise<Session> {
+    let orgId = (session as any).organization_id;
+    if (!orgId && session.program_id) {
+      const { data: prog } = await supabase.from('programs').select('organization_id').eq('id', session.program_id).single();
+      if (prog) orgId = prog.organization_id;
+    }
+
+    const sessionName = session.title || session.name || 'New Session';
+    const sessionDesc = session.overview || session.description || '';
+    const sessionDate = session.date || session.session_date || new Date().toISOString().split('T')[0];
+    const normalizedDate = sessionDate.includes('T') ? sessionDate.split('T')[0] : sessionDate;
+
     const { data, error } = await supabase.from('sessions').insert({
+       organization_id: orgId,
        program_id: session.program_id,
-       name: session.title,
-       description: session.overview,
-       session_date: session.date,
-       session_number: session.session_number,
+       name: sessionName,
+       title: sessionName,
+       description: sessionDesc,
+       overview: sessionDesc,
+       session_date: normalizedDate,
+       date: `${normalizedDate}T00:00:00.000Z`,
+       start_time: session.start_time || '09:00:00',
+       end_time: session.end_time || '11:00:00',
+       session_number: session.session_number || 1,
        qr_code_data: session.qr_code_data || `session-${Math.random().toString(36).substring(2, 11)}`
     }).select().single();
     if (error) throw error;

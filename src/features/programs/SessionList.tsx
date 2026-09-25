@@ -217,10 +217,10 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                 <div className="bg-background md:w-40 flex flex-col items-center justify-center p-8 border-b md:border-b-0 md:border-r border-surface-border relative overflow-hidden group-hover:bg-primary/5 transition-colors">
                                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-premium opacity-50"></div>
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2 group-hover:text-primary">
-                                        {new Date(session.session_date).toLocaleDateString('en-US', { month: 'short' })}
+                                        {(session.session_date || (session as any).date) ? new Date(session.session_date || (session as any).date).toLocaleDateString('en-US', { month: 'short' }) : '---'}
                                     </p>
                                     <p className="text-5xl font-black text-foreground leading-none tracking-tighter">
-                                        {new Date(session.session_date).getDate()}
+                                        {(session.session_date || (session as any).date) ? new Date(session.session_date || (session as any).date).getDate() : '--'}
                                     </p>
                                     <div className="mt-4 w-8 h-1 bg-surface rounded-full overflow-hidden">
                                         <div className="h-full w-full bg-primary/20 group-hover:bg-primary/50 transition-colors"></div>
@@ -246,11 +246,11 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
                                                         : 'Free Session'}
                                                 </span>
                                                 <div className="flex items-center text-[10px] font-black text-slate-500 uppercase tracking-widest bg-background px-3 py-1.5 rounded-lg border border-surface-border">
-                                                    <Clock className="w-3.5 h-3.5 mr-2 text-primary" /> {session.start_time.slice(0, 5)}
+                                                    <Clock className="w-3.5 h-3.5 mr-2 text-primary" /> {session.start_time ? session.start_time.slice(0, 5) : '--:--'}
                                                 </div>
                                             </div>
                                             <div>
-                                                <h3 className="text-2xl font-black text-foreground uppercase tracking-tight group-hover:text-primary transition-colors truncate">{session.name}</h3>
+                                                <h3 className="text-2xl font-black text-foreground uppercase tracking-tight group-hover:text-primary transition-colors truncate">{session.name || (session as any).title || 'Unnamed Session'}</h3>
                                                 <div className="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-3">
                                                     <MapPin className="w-3.5 h-3.5 mr-2 text-pink-500" /> {session.location || 'Church'}
                                                 </div>

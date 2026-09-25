@@ -360,7 +360,7 @@ export function EnrollmentManager() {
 // ─── Enroll User Modal ──────────────────────────────────────────────────────
 function EnrollUserModal({ user, programs, onClose, onSuccess }: { user: Participant, programs: any[], onClose: () => void, onSuccess: () => void }) {
     const { organization } = useOrganization();
-    const { profile } = useAuth();
+    const { profile, user: currentUser } = useAuth();
     const [programId, setProgramId] = useState(programs[0]?.id || '');
     const [due, setDue] = useState(10);
     const [paid, setPaid] = useState(0);
@@ -370,17 +370,25 @@ function EnrollUserModal({ user, programs, onClose, onSuccess }: { user: Partici
         e.preventDefault();
         setLoading(true);
         try {
+            const targetOrgId = organization?.id || profile?.organization_id;
+            const enrolledById = profile?.id || currentUser?.id;
+            if (!targetOrgId || !enrolledById) {
+                alert('Missing organization or user context. Please refresh and try again.');
+                setLoading(false);
+                return;
+            }
+
             const { error } = await supabase
                 .from('enrollments')
                 .insert([{
-                    organization_id: organization!.id,
+                    organization_id: targetOrgId,
                     user_id: user.id,
                     program_id: programId,
                     amount_due: due,
                     amount_paid: paid,
                     payment_status: paid >= due ? 'paid' : (paid > 0 ? 'partial' : 'unpaid'),
                     status: 'active',
-                    enrolled_by: profile!.id
+                    enrolled_by: enrolledById
                 }]);
 
             if (error) throw error;
@@ -439,19 +447,27 @@ function ReceivePaymentModal({ enrollment, profile, onClose, onSuccess }: { enro
         setLoading(true);
         try {
             const receiptNo = manualReceiptNumber.trim() || `REC-${Date.now().toString().slice(-6)}`;
-            
+            const targetOrgId = organization?.id || profile?.organization_id || enrollment?.organization_id;
+            const processorId = profile?.id || enrollment?.user_id;
+
+            if (!targetOrgId || !processorId) {
+                alert('Missing organization or user profile context. Please refresh and try again.');
+                setLoading(false);
+                return;
+            }
+
             const { data: paymentData, error: payError } = await supabase
                 .from('payment_records')
                 .insert([{
-                    organization_id: organization!.id,
+                    organization_id: targetOrgId,
                     user_id: enrollment.user_id,
                     enrollment_id: enrollment.id,
                     amount: amount,
                     payment_method: method,
                     status: 'paid',
-                    processed_by: profile.id,
+                    processed_by: processorId,
                     receipt_number: receiptNo,
-                    confirmed_by: profile.id,
+                    confirmed_by: processorId,
                     confirmed_at: new Date().toISOString()
                 }])
                 .select(`*, user:users(title, first_name, surname), program:programs(name)`)

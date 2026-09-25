@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/services/supabase';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Users, Plus, UserPlus, X, Trash2, Edit2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, GlassBox } from '@/components/ui/Card';
@@ -156,6 +157,8 @@ export function GroupManagement({ programId }: { programId: string }) {
 // ─── Create Group Modal ────────────────────────────────────────────────────────
 function CreateGroupModal({ programId, onClose, onSuccess }: { programId: string, onClose: () => void, onSuccess: () => void }) {
     const { organization } = useOrganization();
+    const { profile } = useAuth();
+    const orgId = organization?.id || profile?.organization_id;
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [capacity, setCapacity] = useState(20);
@@ -165,23 +168,28 @@ function CreateGroupModal({ programId, onClose, onSuccess }: { programId: string
 
     useEffect(() => {
         fetchFacilitators();
-    }, []);
+    }, [orgId]);
 
     const fetchFacilitators = async () => {
+        if (!orgId) return;
         const { data } = await supabase
             .from('users')
             .select('id, first_name, surname')
-            .eq('organization_id', organization!.id)
+            .eq('organization_id', orgId)
             .in('role', ['facilitator', 'program_admin', 'system_admin']); 
         setFacilitators(data || []);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!orgId) {
+            alert('Organization context is missing. Please refresh and try again.');
+            return;
+        }
         setLoading(true);
         try {
             const { error } = await supabase.from('program_groups').insert([{
-                organization_id: organization!.id,
+                organization_id: orgId,
                 program_id: programId,
                 name,
                 description,

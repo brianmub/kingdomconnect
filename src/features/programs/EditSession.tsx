@@ -83,7 +83,7 @@ export function EditSession() {
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.session_date || !formData.start_time || !formData.end_time) {
+        if (!formData.name.trim() || !formData.session_date || !formData.start_time || !formData.end_time) {
             setError('Please fill in all required fields (Name, Date, Start/End Time).');
             return;
         }
@@ -112,12 +112,13 @@ export function EditSession() {
         } catch (err: any) {
             console.error('Error in updateSession:', err);
             const msg = err.message || '';
+            const details = err.details || err.hint || '';
             if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_FAILED')) {
                 setError('Network connection error: Unable to communicate with the database. Please check your internet connection or reload the page.');
             } else if (msg.toLowerCase().includes('timed out') || msg.toLowerCase().includes('timeout')) {
                 setError('Request timed out: The server took too long to respond. Please check your internet connection and try again.');
             } else {
-                setError(msg || 'Failed to update session. Please try again.');
+                setError([msg, details].filter(Boolean).join(' — ') || 'Failed to update session. Please try again.');
             }
         } finally {
             setSaving(false);

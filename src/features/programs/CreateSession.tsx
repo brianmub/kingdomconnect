@@ -12,7 +12,7 @@ import { Program } from '@/types';
 export function CreateSession() {
     const { programId } = useParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, profile, profiles } = useAuth();
     const { organization } = useOrganization();
 
     const [program, setProgram] = useState<Program | null>(null);
@@ -64,14 +64,31 @@ export function CreateSession() {
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.session_date || !formData.start_time || !formData.end_time) {
+        if (!formData.name.trim() || !formData.session_date || !formData.start_time || !formData.end_time) {
             setError('Please fill in all required fields (Name, Date, Start/End Time).');
             return;
         }
 
-        const targetOrgId = program?.organization_id || organization?.id;
-        if (!user || !targetOrgId) {
-            setError('Authentication or organization details missing. Please refresh and try again.');
+        if (!user) {
+            setError('Your login session has expired. Please refresh and log in again.');
+            return;
+        }
+
+        let targetOrgId = program?.organization_id || organization?.id || profile?.organization_id || profiles?.[0]?.organization_id;
+        if (!targetOrgId && programId) {
+            try {
+                const prog = await programService.getProgramById(programId);
+                if (prog?.organization_id) {
+                    targetOrgId = prog.organization_id;
+                    setProgram(prog);
+                }
+            } catch (e) {
+                console.warn('Fallback fetch of program failed:', e);
+            }
+        }
+
+        if (!targetOrgId) {
+            setError('Organization details missing. Please refresh and try again.');
             return;
         }
 
@@ -102,12 +119,13 @@ export function CreateSession() {
         } catch (err: any) {
             console.error('Error in createSession:', err);
             const msg = err.message || '';
+            const details = err.details || err.hint || '';
             if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ERR_FAILED')) {
                 setError('Network connection error: Unable to communicate with the database. Please check your internet connection or reload the page.');
             } else if (msg.toLowerCase().includes('timed out') || msg.toLowerCase().includes('timeout')) {
                 setError('Request timed out: The server took too long to respond. Please check your internet connection and try again.');
             } else {
-                setError(msg || 'Failed to create session. Please try again.');
+                setError([msg, details].filter(Boolean).join(' — ') || 'Failed to create session. Please try again.');
             }
         } finally {
             setSaving(false);
