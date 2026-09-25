@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight, Sparkles, Loader2, Eye, EyeOff, AlertCircle, He
 import { authService } from '@/services/authService';
 import { supabase } from '@/services/supabase';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useAuth } from '@/hooks/useAuth';
 
 export function LoginPage() {
     const [email, setEmail] = useState('');
@@ -17,7 +18,26 @@ export function LoginPage() {
     const [trials, setTrials] = useState(0);
     const navigate = useNavigate();
     const { switchOrganization } = useOrganization();
+    const { user: authUser, profile: authProfile } = useAuth();
     const { orgSlug } = useParams();
+
+    // Auto-redirect if already authenticated
+    React.useEffect(() => {
+        if (authUser && authProfile) {
+            if (orgSlug) {
+                const isPart = authProfile.role === 'participant' || authProfile.role === 'facilitator';
+                navigate(isPart ? `/portal/${orgSlug}/dashboard` : '/dashboard');
+            } else {
+                const isPart = authProfile.role === 'participant' || authProfile.role === 'facilitator';
+                const lastSlug = localStorage.getItem('active_org_slug');
+                if (isPart && lastSlug) {
+                    navigate(`/portal/${lastSlug}/dashboard`);
+                } else {
+                    navigate('/dashboard');
+                }
+            }
+        }
+    }, [authUser, authProfile, orgSlug, navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

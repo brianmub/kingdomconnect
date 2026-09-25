@@ -233,6 +233,24 @@ export const sessionService = {
         return sessEnroll;
     },
 
+    async getSessionsPaymentStatuses(sessionIds: string[], userId: string) {
+        if (!sessionIds.length) return [];
+        const { data, error } = await supabase
+            .from('session_enrollments')
+            .select(`
+                *,
+                enrollments!inner (user_id)
+            `)
+            .in('session_id', sessionIds)
+            .eq('enrollments.user_id', userId);
+
+        if (error) {
+            console.error('Error fetching batch session payments:', error);
+            return [];
+        }
+        return data || [];
+    },
+
     async recordSessionPayment(
         sessionId: string,
         userId: string,

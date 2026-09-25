@@ -12,7 +12,8 @@ export function RequireRole({ children, roles }: RequireRoleProps) {
     const { user, profile, loading } = useAuth();
     const location = useLocation();
 
-    if (loading && (!user || !profile)) {
+    // Show loader if general auth is loading OR if user is authenticated but profile is still in-flight
+    if (loading || (user && !profile)) {
         return (
             <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100]">
                 <Loader2 className="w-12 h-12 text-primary animate-spin" />

@@ -78,18 +78,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(u);
 
             if (u) {
-                // Defer profile fetch outside of the auth lock context to avoid deadlock
-                setTimeout(() => {
+                // Defer profile fetch outside of the auth lock context to avoid deadlock,
+                // but keep loading true until profile finishes loading
+                setTimeout(async () => {
                     if (mounted) {
-                        fetchProfile(u.id);
+                        try {
+                            await fetchProfile(u.id);
+                        } finally {
+                            if (mounted) {
+                                setLoading(false);
+                            }
+                        }
                     }
                 }, 0);
             } else {
                 setProfile(null);
                 setProfiles([]);
+                setLoading(false);
             }
-            
-            setLoading(false);
         });
 
         initializeAuth();

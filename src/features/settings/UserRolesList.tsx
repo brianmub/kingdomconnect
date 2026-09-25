@@ -35,12 +35,12 @@ export function UserRolesList() {
     const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (organization) {
+        if (organization?.id) {
             fetchUsers();
         } else {
             setLoading(false);
         }
-    }, [organization]);
+    }, [organization?.id]);
 
     const fetchUsers = async () => {
         setLoading(true);

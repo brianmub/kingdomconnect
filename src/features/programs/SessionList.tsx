@@ -47,26 +47,28 @@ export function SessionList({ embedded = false }: { embedded?: boolean }) {
             setSessions(sessData);
             setProgram(progData);
 
-            if (isParticipant && user) {
+            if (isParticipant && user && sessData.length > 0) {
+                const sessionIds = sessData.map(s => s.id);
                 const statusMap: Record<string, any> = {};
                 const attMap: Record<string, any> = {};
 
-                await Promise.all(sessData.map(async (s) => {
-                    try {
-                        const status = await sessionService.getSessionPaymentStatus(s.id, user.id);
-                        if (status) statusMap[s.id] = status;
+                const [paymentsBatch, attendanceBatch] = await Promise.all([
+                    sessionService.getSessionsPaymentStatuses(sessionIds, user.id),
+                    supabase
+                        .from('attendance_records')
+                        .select('*')
+                        .in('session_id', sessionIds)
+                        .eq('user_id', user.id)
+                ]);
 
-                        const { data: att } = await supabase
-                            .from('attendance_records')
-                            .select('*')
-                            .eq('session_id', s.id)
-                            .eq('user_id', user.id)
-                            .maybeSingle();
-                        if (att) attMap[s.id] = att;
-                    } catch (e) {
-                        console.error('Error fetching session details:', e);
-                    }
-                }));
+                (paymentsBatch || []).forEach((p: any) => {
+                    statusMap[p.session_id] = p;
+                });
+
+                (attendanceBatch.data || []).forEach((a: any) => {
+                    attMap[a.session_id] = a;
+                });
+
                 setPaymentStatuses(statusMap);
                 setAttendanceData(attMap);
             }

@@ -73,11 +73,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             
             if (data) {
                 console.log('TenantContext: Organization found:', data.name);
-                setOrganization(data as Organization);
+                setOrganization(prev => (prev?.id === data.id && prev?.slug === data.slug ? prev : (data as Organization)));
                 localStorage.setItem('active_org_slug', data.slug);
                 
                 const match = profiles?.find(p => p.organization_id === data.id);
-                if (match) setCurrentProfile(match);
+                if (match) {
+                    setCurrentProfile((prev: any) => (prev?.id === match.id && prev?.role === match.role ? prev : match));
+                }
             }
         } catch (err: any) {
             console.error('TenantContext: Error fetching organization:', err);

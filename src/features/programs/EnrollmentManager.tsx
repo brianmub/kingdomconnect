@@ -38,39 +38,39 @@ export function EnrollmentManager() {
     const [payments, setPayments] = useState<any[]>([]);
 
     useEffect(() => {
-        if (organization) {
+        if (organization?.id) {
             fetchData();
         }
-    }, [organization]);
+    }, [organization?.id]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Get ALL Users in Organization
-            const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('id, first_name, surname, email, role, dob, church_name, residential_address')
-                .eq('organization_id', organization!.id);
+            // Fetch users, enrollments, and programs in parallel
+            const [usersRes, enrollRes, progRes] = await Promise.all([
+                supabase
+                    .from('users')
+                    .select('id, first_name, surname, email, role, dob, church_name, residential_address')
+                    .eq('organization_id', organization!.id),
+                supabase
+                    .from('enrollments')
+                    .select(`
+                        *,
+                        program:programs (id, name)
+                    `)
+                    .eq('organization_id', organization!.id),
+                supabase
+                    .from('programs')
+                    .select('id, name')
+                    .eq('organization_id', organization!.id)
+            ]);
 
-            if (usersError) throw usersError;
+            if (usersRes.error) throw usersRes.error;
+            if (enrollRes.error) throw enrollRes.error;
 
-            // 2. Get ALL Enrollments in Organization
-            const { data: enrollData, error: enrollError } = await supabase
-                .from('enrollments')
-                .select(`
-                    *,
-                    program:programs (id, name)
-                `)
-                .eq('organization_id', organization!.id);
-
-            if (enrollError) throw enrollError;
-
-            // 3. Get Programs for Enrollment Modal
-            const { data: progData } = await supabase
-                .from('programs')
-                .select('id, name')
-                .eq('organization_id', organization!.id);
-            setPrograms(progData || []);
+            const usersData = usersRes.data || [];
+            const enrollData = enrollRes.data || [];
+            setPrograms(progRes.data || []);
 
             // 4. Merge Data
             const merged = (usersData || []).map(user => ({

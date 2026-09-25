@@ -37,14 +37,14 @@ export function PaymentsPage() {
     const PAGE_SIZE = 20;
 
     useEffect(() => {
-        if (organization) {
+        if (organization?.id) {
             setPage(0);
             setPayments([]);
             setHasMore(true);
             fetchPayments(0, true);
             fetchTotalStats();
         }
-    }, [organization]);
+    }, [organization?.id]);
 
     const fetchTotalStats = async () => {
         try {
